@@ -64,6 +64,9 @@ class PostgresSmartBackend implements Backend
         $tsQueryFunction = $this->tsQueryFunction();
         $rankingFunction = $this->rankingFunction();
         return $this->db->prepare("
+            WITH matching_backlog AS (
+              SELECT * FROM backlog WHERE tsv @@ $tsQueryFunction
+            )
             SELECT
               ranked_messages.bufferid,
               ranked_messages.buffername,
@@ -101,7 +104,7 @@ class PostgresSmartBackend implements Backend
                     query,
                     $rankingFunction AS rank_value
                   FROM
-                    backlog
+                    matching_backlog AS backlog
                     JOIN buffer ON backlog.bufferid = buffer.bufferid
                     , $tsQueryFunction query
                   WHERE buffer.userid = :userid
@@ -109,7 +112,6 @@ class PostgresSmartBackend implements Backend
                     AND (:ignore_before::BOOLEAN OR backlog.time < :before::TIMESTAMP)
                     AND (:ignore_buffer::BOOLEAN OR buffer.buffername ~* :buffer)
                     AND backlog.type & 23559 > 0
-                    AND backlog.tsv @@ query
                  ) matching_messages
                 JOIN sender ON matching_messages.senderid = sender.senderid
                 JOIN network ON matching_messages.networkid = network.networkid
@@ -150,6 +152,9 @@ class PostgresSmartBackend implements Backend
         $tsQueryFunction = $this->tsQueryFunction();
         $rankingFunction = $this->rankingFunction();
         return $this->db->prepare("
+            WITH matching_backlog AS (
+              SELECT * FROM backlog WHERE tsv @@ $tsQueryFunction
+            )
             SELECT
               matching_messages.messageid,
               matching_messages.time,
@@ -168,7 +173,7 @@ class PostgresSmartBackend implements Backend
                  query,
                  $rankingFunction AS rank_value
                FROM
-                 backlog
+                 matching_backlog AS backlog
                  JOIN buffer ON backlog.bufferid = buffer.bufferid
                  , $tsQueryFunction query
                WHERE buffer.userid = :userid
@@ -176,7 +181,6 @@ class PostgresSmartBackend implements Backend
                  AND (:ignore_since::BOOLEAN OR backlog.time > :since::TIMESTAMP)
                  AND (:ignore_before::BOOLEAN OR backlog.time < :before::TIMESTAMP)
                  AND backlog.type & 23559 > 0
-                 AND backlog.tsv @@ query
               ) matching_messages
               JOIN sender ON matching_messages.senderid = sender.senderid
               JOIN network ON matching_messages.networkid = network.networkid
